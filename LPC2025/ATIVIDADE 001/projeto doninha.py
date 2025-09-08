@@ -72,15 +72,19 @@ def execute_simulation():
         # Avalia cada cópia e encontra a melhor da geração atual.
         for copy in generation_copies:
             current_position = assessment_of_phrase(copy)
-            # If the position of the copy is closer to the phrase than the current one, 
+            # If the position of the copy is closer to the
+            #  phrase than the current one,
             # it becomes the new close position for the next generation.
             if current_position > close_position:
                 close_position = current_position
                 close_phrase = copy
-        
+
         # Print the progress
-        print(f"Generation {generation_counter}: Position Number={close_position}/{len(target_phrase)}, Phrase='{close_phrase}'")
-    
+        print(
+            f"Generation {generation_counter}: Position Number={close_position}
+            /{len(target_phrase)}, Phrase='{close_phrase}'"
+        )
+
     print("\n=== SIMULATION COMPLETE! ===")
 
 # =========ENTRANCE OF THE PROGRAM=========
