@@ -28,7 +28,8 @@ victory_text_rect.center = (450, 350)
 
 # sound effects
 bounce_sound_effect = pygame.mixer.Sound('assets/bounce.wav')
-scoring_sound_effect = pygame.mixer.Sound('assets/258020__kodack__arcade-bleep-sound.wav')
+scoring_sound_effect = (pygame.mixer.Sound
+                        ('assets/258020__kodack__arcade-bleep-sound.wav'))
 
 # player 1
 player_1 = pygame.image.load("assets/player.png")
@@ -149,7 +150,8 @@ while game_loop:
             player_2_y = 570
 
         # update score hud
-        score_text = score_font.render(str(score_1) + ' x ' + str(score_2), True, COLOR_WHITE, COLOR_BLACK)
+        score_text = (score_font.render(str(score_1) + ' x ' + str(score_2),
+                                        True, COLOR_WHITE, COLOR_BLACK))
 
         # drawing objects
         screen.blit(ball, (ball_x, ball_y))
