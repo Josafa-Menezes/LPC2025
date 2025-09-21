@@ -1,1 +1,1 @@
-Repositorio para resolução de bugs em jogos de LPC
+Repositorio para resolução de atividades ministradas pelo Prof. Dr. Jucimar Júnior.
