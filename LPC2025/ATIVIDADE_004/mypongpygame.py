@@ -8,28 +8,29 @@ pygame.init()
 COLOR_BLACK = (0, 0, 0)
 COLOR_WHITE = (255, 255, 255)
 
-SCORE_MAX = 2
+SCORE_MAX = 10
 
 size = (1280, 720)
 screen = pygame.display.set_mode(size)
 pygame.display.set_caption("MyPong - PyGame Edition - 2024-09-02")
 
 # score text
-score_font = pygame.font.Font('assets/PressStart2P.ttf', 44)
-score_text = score_font.render('00 x 00', True, COLOR_WHITE, COLOR_BLACK)
+score_font = pygame.font.Font("assets/PressStart2P.ttf", 44)
+score_text = score_font.render("00 x 00", True, COLOR_WHITE, COLOR_BLACK)
 score_text_rect = score_text.get_rect()
 score_text_rect.center = (680, 50)
 
 # victory text
-victory_font = pygame.font.Font('assets/PressStart2P.ttf', 100)
-victory_text = victory_font .render('VICTORY', True, COLOR_WHITE, COLOR_BLACK)
+victory_font = pygame.font.Font("assets/PressStart2P.ttf", 100)
+victory_text = victory_font.render("VICTORY", True, COLOR_WHITE, COLOR_BLACK)
 victory_text_rect = score_text.get_rect()
 victory_text_rect.center = (450, 350)
 
 # sound effects
-bounce_sound_effect = pygame.mixer.Sound('assets/bounce.wav')
-scoring_sound_effect = (pygame.mixer.Sound
-                        ('assets/258020__kodack__arcade-bleep-sound.wav'))
+bounce_sound_effect = pygame.mixer.Sound("assets/bounce.wav")
+scoring_sound_effect = pygame.mixer.Sound(
+    "assets/258020__kodack__arcade-bleep-sound.wav"
+)
 
 # player 1
 player_1 = pygame.image.load("assets/player.png")
@@ -62,7 +63,7 @@ while game_loop:
         if event.type == pygame.QUIT:
             game_loop = False
 
-        #  keystroke events
+        # keystroke events
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 player_1_move_up = True
@@ -88,19 +89,28 @@ while game_loop:
             ball_dy *= -1
             bounce_sound_effect.play()
 
-        # ball collision with the player 1 's paddle
-        if ball_x < 100:
-            if player_1_y < ball_y + 25:
-                if player_1_y + 150 > ball_y:
-                    ball_dx *= -1
-                    bounce_sound_effect.play()
+        # create rects for collision
+        ball_rect = pygame.Rect(
+            ball_x, ball_y, ball.get_width(), ball.get_height()
+        )
+        player_1_rect = pygame.Rect(
+            50, player_1_y, player_1.get_width(), player_1.get_height()
+        )
+        player_2_rect = pygame.Rect(
+            1180, player_2_y, player_2.get_width(), player_2.get_height()
+        )
 
-        # ball collision with the player 2 's paddle
-        if ball_x > 1160:
-            if player_2_y < ball_y + 25:
-                if player_2_y + 150 > ball_y:
-                    ball_dx *= -1
-                    bounce_sound_effect.play()
+        # ball collision with player 1's paddle
+        if ball_rect.colliderect(player_1_rect):
+            ball_dx = abs(ball_dx)  # always move right
+            ball_x = player_1_rect.right  # push ball outside the paddle
+            bounce_sound_effect.play()
+
+        # ball collision with player 2's paddle
+        if ball_rect.colliderect(player_2_rect):
+            ball_dx = -abs(ball_dx)  # always move left
+            ball_x = player_2_rect.left - ball.get_width()
+            bounce_sound_effect.play()
 
         # scoring points
         if ball_x < -50:
@@ -125,14 +135,10 @@ while game_loop:
         # player 1 up movement
         if player_1_move_up:
             player_1_y -= 5
-        else:
-            player_1_y += 0
 
         # player 1 down movement
         if player_1_move_down:
             player_1_y += 5
-        else:
-            player_1_y += 0
 
         # player 1 collides with upper wall
         if player_1_y <= 0:
@@ -143,18 +149,19 @@ while game_loop:
             player_1_y = 570
 
         # player 2 "Artificial Intelligence"
-        if ball_y > player_2_y + 75:
-            player_2_y += 2
-        elif ball_y < player_2_y + 75:
-            player_2_y -= 2
+        player_2_y = ball_y
         if player_2_y <= 0:
             player_2_y = 0
         elif player_2_y >= 570:
             player_2_y = 570
 
         # update score hud
-        score_text = (score_font.render(str(score_1) + ' x ' + str(score_2),
-                                        True, COLOR_WHITE, COLOR_BLACK))
+        score_text = score_font.render(
+            str(score_1) + " x " + str(score_2),
+            True,
+            COLOR_WHITE,
+            COLOR_BLACK,
+        )
 
         # drawing objects
         screen.blit(ball, (ball_x, ball_y))
