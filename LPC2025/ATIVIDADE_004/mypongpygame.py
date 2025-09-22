@@ -45,8 +45,10 @@ player_2_y = 300
 ball = pygame.image.load("assets/ball.png")
 ball_x = 640
 ball_y = 360
-ball_dx = 5
-ball_dy = 5
+initial_ball_speed = 5
+ball_dx = initial_ball_speed
+ball_dy = initial_ball_speed
+acceleration_factor = 1.10
 
 # score
 score_1 = 0
@@ -84,9 +86,13 @@ while game_loop:
         if ball_y > 700:
             ball_dy *= -1
             bounce_sound_effect.play()
+            ball_dx *= acceleration_factor
+            ball_dy *= acceleration_factor
         elif ball_y <= 0:
             ball_dy *= -1
             bounce_sound_effect.play()
+            ball_dx *= acceleration_factor
+            ball_dy *= acceleration_factor
 
         # ball collision with the player 1 's paddle
         if ball_x < 100:
@@ -94,6 +100,8 @@ while game_loop:
                 if player_1_y + 150 > ball_y:
                     ball_dx *= -1
                     bounce_sound_effect.play()
+                    ball_dx *= acceleration_factor
+                    ball_dy *= acceleration_factor
 
         # ball collision with the player 2 's paddle
         if ball_x > 1160:
@@ -101,6 +109,8 @@ while game_loop:
                 if player_2_y + 150 > ball_y:
                     ball_dx *= -1
                     bounce_sound_effect.play()
+                    ball_dx *= acceleration_factor
+                    ball_dy *= acceleration_factor
 
         # scoring points
         if ball_x < -50:
@@ -110,6 +120,8 @@ while game_loop:
             ball_dx *= -1
             score_2 += 1
             scoring_sound_effect.play()
+            ball_dx = initial_ball_speed * (1 if ball_dx > 0 else -1)
+            ball_dy = initial_ball_speed * (1 if ball_dy > 0 else -1)
         elif ball_x > 1320:
             ball_x = 640
             ball_y = 360
@@ -117,6 +129,8 @@ while game_loop:
             ball_dx *= -1
             score_1 += 1
             scoring_sound_effect.play()
+            ball_dx = initial_ball_speed * (1 if ball_dx > 0 else -1)
+            ball_dy = initial_ball_speed * (1 if ball_dy > 0 else -1)
 
         # ball movement
         ball_x = ball_x + ball_dx
@@ -144,9 +158,9 @@ while game_loop:
 
         # player 2 "Artificial Intelligence"
         if ball_y > player_2_y + 75:
-            player_2_y += 2
+            player_2_y += 3
         elif ball_y < player_2_y + 75:
-            player_2_y -= 2
+            player_2_y -= 3
         if player_2_y <= 0:
             player_2_y = 0
         elif player_2_y >= 570:
