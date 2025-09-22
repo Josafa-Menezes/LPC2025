@@ -2,13 +2,14 @@
 # 2024
 
 import pygame
+import math
 
 pygame.init()
 
 COLOR_BLACK = (0, 0, 0)
 COLOR_WHITE = (255, 255, 255)
 
-SCORE_MAX = 10
+SCORE_MAX = 4
 
 size = (1280, 720)
 screen = pygame.display.set_mode(size)
@@ -50,6 +51,10 @@ initial_ball_speed = 5
 ball_dx = initial_ball_speed
 ball_dy = initial_ball_speed
 acceleration_factor = 1.10
+
+# When the ball hits the paddle tip, it can leave up to this angle.
+# Adjust if desired (e.g., 45°, 60°, 75°).
+MAX_BOUNCE_ANGLE = math.radians(60)
 
 # score
 score_1 = 0
@@ -106,15 +111,55 @@ while game_loop:
             1180, player_2_y, player_2.get_width(), player_2.get_height()
         )
 
-        # ball collision with player 1's paddle
+        # COLLISION: left paddle now calculates bounce angle
         if ball_rect.colliderect(player_1_rect):
-            ball_dx = abs(ball_dx)  # always move right
-            ball_x = player_1_rect.right  # push ball outside the paddle
+            # calculate centers (uses actual image heights)
+            ball_center_y = ball_y + ball.get_height() / 2
+            paddle_center_y = player_1_y + player_1.get_height() / 2
+
+            # negative = hit upper half, positive = lower half
+            relative_intersect = ball_center_y - paddle_center_y
+
+            # normalize to range [-1, 1]
+            normalized = relative_intersect / (player_1.get_height() / 2)
+            if normalized < -1:
+                normalized = -1
+            if normalized > 1:
+                normalized = 1
+
+            # map to angle between -MAX_BOUNCE_ANGLE and +MAX_BOUNCE_ANGLE
+            bounce_angle = normalized * MAX_BOUNCE_ANGLE
+
+            # keep speed magnitude and recompute components
+            speed = math.hypot(ball_dx, ball_dy)
+            direction = 1  # left side => ball goes to the right
+            ball_dx = direction * speed * math.cos(bounce_angle)
+            ball_dy = speed * math.sin(bounce_angle)
+
+            # push ball outside the paddle to avoid 'sticking'
+            ball_x = player_1_rect.right
             bounce_sound_effect.play()
 
-        # ball collision with player 2's paddle
+        # COLLISION: right paddle now calculates bounce angle
         if ball_rect.colliderect(player_2_rect):
-            ball_dx = -abs(ball_dx)  # always move left
+            # calculate centers (uses actual image heights)
+            ball_center_y = ball_y + ball.get_height() / 2
+            paddle_center_y = player_2_y + player_2.get_height() / 2
+
+            relative_intersect = ball_center_y - paddle_center_y
+            normalized = relative_intersect / (player_2.get_height() / 2)
+            if normalized < -1:
+                normalized = -1
+            if normalized > 1:
+                normalized = 1
+
+            bounce_angle = normalized * MAX_BOUNCE_ANGLE
+            speed = math.hypot(ball_dx, ball_dy)
+            direction = -1  # right side => ball goes to the left
+            ball_dx = direction * speed * math.cos(bounce_angle)
+            ball_dy = speed * math.sin(bounce_angle)
+
+            # push ball outside the paddle to avoid 'sticking'
             ball_x = player_2_rect.left - ball.get_width()
             bounce_sound_effect.play()
 
@@ -160,9 +205,9 @@ while game_loop:
 
         # player 2 "Artificial Intelligence"
         if ball_y > player_2_y + 75:
-            player_2_y += 1.5
+            player_2_y += 7
         elif ball_y < player_2_y + 75:
-            player_2_y -= 1.5
+            player_2_y -= 7
         if player_2_y <= 0:
             player_2_y = 0
         elif player_2_y >= 570:
