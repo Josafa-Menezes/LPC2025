@@ -113,6 +113,8 @@ while game_loop:
 
         # COLLISION: left paddle now calculates bounce angle
         if ball_rect.colliderect(player_1_rect):
+            ball_dx *= acceleration_factor
+            ball_dy *= acceleration_factor
             # calculate centers (uses actual image heights)
             ball_center_y = ball_y + ball.get_height() / 2
             paddle_center_y = player_1_y + player_1.get_height() / 2
@@ -142,6 +144,8 @@ while game_loop:
 
         # COLLISION: right paddle now calculates bounce angle
         if ball_rect.colliderect(player_2_rect):
+            ball_dx *= acceleration_factor
+            ball_dy *= acceleration_factor
             # calculate centers (uses actual image heights)
             ball_center_y = ball_y + ball.get_height() / 2
             paddle_center_y = player_2_y + player_2.get_height() / 2
@@ -226,12 +230,13 @@ while game_loop:
         screen.blit(player_1, (50, player_1_y))
         screen.blit(player_2, (1180, player_2_y))
         screen.blit(score_text, score_text_rect)
+    # ... o jogo continua ...
     else:
         # drawing victory
         screen.fill(COLOR_BLACK)
         screen.blit(score_text, score_text_rect)
         screen.blit(victory_text, victory_text_rect)
-
+    # ... alguém venceu ...
     # update screen
     pygame.display.flip()
     game_clock.tick(60)
