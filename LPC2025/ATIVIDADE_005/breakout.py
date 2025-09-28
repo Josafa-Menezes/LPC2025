@@ -1,202 +1,204 @@
 import pygame
-import math
 
-pygame.init()
-
-COLOR_BLACK = (0, 0, 0)
-COLOR_WHITE = (255, 255, 255)
-
-SCORE_MAX = 4
-
-size = (1280, 720)
-screen = pygame.display.set_mode(size)
-pygame.display.set_caption("Breakout - PyGame Edition - 2025-09-27")
-
-# Fonts
-font_path = "assets/PressStart2P.ttf"
-
-score_font = pygame.font.Font(font_path, 44)
-victory_font = pygame.font.Font(font_path, 100)
-game_over_font = pygame.font.Font(font_path, 100)
-paused_font = pygame.font.Font(font_path, 70)
-
-
-# UI Rects (will be updated dynamically)
-score_text_rect = pygame.Rect((0, 0), (1, 1))
-life_text_rect = pygame.Rect((0, 0), (1, 1))
+# --- Game Constants ---
+# Screen dimensions
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+# Colors (RGB)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+# Other constants
+BALL_RADIUS = 10
+BALL_SPEED_X = 5
+BALL_SPEED_Y = 5
+PADDLE_WIDTH = 100
+PADDLE_HEIGHT = 20
+PADDLE_SPEED = 7
+FPS = 60
 
 
-# Victory text
-victory_text = victory_font.render("VICTORY", True, COLOR_WHITE)
-victory_text_rect = victory_text.get_rect(center=(size[0]/2, size[1]/2))
+# --- Ball Class ---
+class Ball(pygame.sprite.Sprite):
+    """Represents the game's ball."""
+    def __init__(self, x, y, radius, color, speed_x, speed_y):
+        super().__init__()
+        self.image = pygame.Surface([radius * 2, radius * 2], pygame.SRCALPHA)
+        pygame.draw.circle(self.image, color, (radius, radius), radius)
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed_x = speed_x
+        self.speed_y = speed_y
 
-# Game Over text
-game_over_text = game_over_font.render("GAME OVER", True, COLOR_WHITE)
-game_over_text_rect = game_over_text.get_rect(center=(size[0]/2, size[1]/2))
+    def update(self):
+        """Updates the ball's position and handles wall collisions."""
+        self.rect.x += self.speed_x
+        self.rect.y += self.speed_y
 
-# Player
-player = pygame.image.load("assets/player.png")
-player_y = 300
-player_move_up = False
-player_move_down = False
-player_speed = 10
+        # Collision with side walls
+        if self.rect.left <= 0 or self.rect.right >= SCREEN_WIDTH:
+            self.speed_x *= -1
 
-# Ball
-ball = pygame.image.load("assets/ball.png")
-initial_ball_speed = 5
-ball_dx = initial_ball_speed
-ball_dy = initial_ball_speed
-acceleration_factor = 1.05
+        # Collision with top wall
+        if self.rect.top <= 0:
+            self.speed_y *= -1
 
-# When the ball hits the paddle tip, it can leave up to this angle.
-MAX_BOUNCE_ANGLE = math.radians(60)
+        # Collision with bottom wall (lost a life)
+        if self.rect.bottom >= SCREEN_HEIGHT:
+            return True  # Signals that the ball went off-screen
+        return False
 
-# Game state variables
-score = 0
-lives = 3
+    def reset_position(self, x, y):
+        """Resets the ball's position to the center of the screen."""
+        self.rect.center = (x, y)
+        self.speed_x = BALL_SPEED_X
+        self.speed_y = BALL_SPEED_Y
 
-# Game States
-GAME_STATE_PLAYING = 0
-GAME_STATE_PAUSED = 1
-GAME_STATE_VICTORY = 2
-GAME_STATE_GAME_OVER = 3
 
-game_state = GAME_STATE_PLAYING
+# --- Paddle Class ---
+class Paddle(pygame.sprite.Sprite):
+    """Represents the player-controlled paddle."""
+    def __init__(self, x, y, width, height, color):
+        super().__init__()
+        self.image = pygame.Surface([width, height])
+        self.image.fill(color)
+        self.rect = self.image.get_rect(center=(x, y))
 
-# game loop
-game_loop = True
-game_clock = pygame.time.Clock()
+    def update(self):
+        """Updates the paddle's position based on keyboard input."""
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] and self.rect.left > 0:
+            self.rect.x -= PADDLE_SPEED
+        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:
+            self.rect.x += PADDLE_SPEED
 
-# Initial ball position (centered)
-ball_x = size[0] / 2 - ball.get_width() / 2
-ball_y = size[1] / 2 - ball.get_height() / 2
 
-while game_loop:
+# --- Game Functions ---
+def draw_text(surface, text, size, x, y, color=WHITE):
+    """Draws text on the screen."""
+    font = pygame.font.Font(None, size)
+    text_surface = font.render(text, True, color)
+    text_rect = text_surface.get_rect(center=(x, y))
+    surface.blit(text_surface, text_rect)
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            game_loop = False
 
-        # Key presses
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP:
-                player_move_up = True
-            if event.key == pygame.K_DOWN:
-                player_move_down = True
+def main_game_loop():
+    """Main function containing the game loop."""
+    pygame.init()
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pygame.display.set_caption("Breakout Pygame")
+    clock = pygame.time.Clock()
 
-            # Pause/Unpause
-            if event.key == pygame.K_SPACE:
-                if game_state == GAME_STATE_PLAYING:
-                    game_state = GAME_STATE_PAUSED
-                elif game_state == GAME_STATE_PAUSED:
-                    game_state = GAME_STATE_PLAYING
+    # --- Game Variables ---
+    score = 0
+    lives = 3
+    game_state = "MENU"  # States: "MENU", "PLAYING", "PAUSED", "GAME_OVER"
 
-            # Restart game (from Game Over or Victory)
-            if game_state in (GAME_STATE_GAME_OVER, GAME_STATE_VICTORY) and \
-               event.key == pygame.K_r:
-                score = 0
-                lives = 3
-                ball_x = size[0] / 2 - ball.get_width() / 2
-                ball_y = size[1] / 2 - ball.get_height() / 2
-                ball_dx = initial_ball_speed
-                ball_dy = initial_ball_speed
-                player_y = 300
-                game_state = GAME_STATE_PLAYING
+    # Sprite groups
+    all_sprites = pygame.sprite.Group()
+    balls = pygame.sprite.Group()
+    paddles = pygame.sprite.Group()
 
-        # Key releases
-        if event.type == pygame.KEYUP:
-            if event.key == pygame.K_UP:
-                player_move_up = False
-            if event.key == pygame.K_DOWN:
-                player_move_down = False
+    # Create the ball
+    ball = Ball(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2,
+                BALL_RADIUS, WHITE, BALL_SPEED_X, BALL_SPEED_Y)
+    all_sprites.add(ball)
+    balls.add(ball)
 
-    # Clear screen at the beginning of each frame
-    screen.fill(COLOR_BLACK)
+    # Create the paddle
+    paddle = Paddle(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30,
+                    PADDLE_WIDTH, PADDLE_HEIGHT, BLUE)
+    all_sprites.add(paddle)
+    paddles.add(paddle)
 
-    # --- Game Logic based on State ---
-    if game_state == GAME_STATE_PLAYING:
-        # Player movement
-        if player_move_up:
-            player_y -= player_speed
-        if player_move_down:
-            player_y += player_speed
+    # --- Main Game Loop ---
+    running = True
+    while running:
+        # Event handling
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    if game_state == "MENU":
+                        game_state = "PLAYING"
+                        score = 0
+                        lives = 3
+                        ball.reset_position(
+                            SCREEN_WIDTH // 2,
+                            SCREEN_HEIGHT // 2
+                        )
+                    elif game_state == "PAUSED":
+                        game_state = "PLAYING"
+                    elif game_state == "PLAYING":
+                        game_state = "PAUSED"
+                elif event.key == pygame.K_r and game_state == "GAME_OVER":
+                    game_state = "MENU"
 
-        # Player boundary check
-        if player_y < 0:
-            player_y = 0
-        if player_y > size[1] - player.get_height():
-            player_y = size[1] - player.get_height()
+        # --- Game Logic (based on state) ---
+        if game_state == "PLAYING":
+            # Update sprites
+            all_sprites.update()
 
-        # Ball collision with walls
-        if ball_x + ball.get_width() > size[0]:
-            ball_dx *= -1
-        elif ball_x < 0:
-            ball_dx *= -1
+            # Ball logic and collisions
+            ball_out = ball.update()
+            if ball_out:
+                lives -= 1
+                if lives <= 0:
+                    game_state = "GAME_OVER"
+                else:
+                    ball.reset_position(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
 
-        if ball_y < 0:
-            ball_dy *= -1
+            # Ball collision with paddle
+            if pygame.sprite.spritecollide(paddle, balls, False):
+                ball.speed_y *= -1
+                # Small adjustment to prevent the ball from getting stuck
+                ball.rect.bottom = paddle.rect.top - 1
 
-        # Check if ball went out of bounds
-        # (lost a life - going off the right side)
-        if ball_x > size[0]:
-            lives -= 1
-            if lives <= 0:
-                game_state = GAME_STATE_GAME_OVER
-            else:
-                # Reset ball position and speed for next life
-                ball_x = size[0] / 2 - ball.get_width() / 2
-                ball_y = size[1] / 2 - ball.get_height() / 2
-                ball_dx = initial_ball_speed * (1 if ball_dx > 0 else -1)
-                ball_dy = initial_ball_speed * (1 if ball_dy > 0 else -1)
+            # You will add block collision logic here later
+            # For now, just as an example for scoring:
+            # if block_hit:
+            #     score += 10
+            #     remove_block()
 
-        # Create rects for collision
-        ball_rect = pygame.Rect(ball_x, ball_y,
-                                ball.get_width(), ball.get_height())
-        player_rect = pygame.Rect(50, player_y,
-                                  player.get_width(), player.get_height())
+        # --- Drawing to the Screen ---
+        screen.fill(BLACK)  # Fills the background with black
 
-        # COLLISION: Ball with Paddle (Vertical paddle logic)
-        if ball_rect.colliderect(player_rect):
-            # Push ball outside the paddle to avoid 'sticking'
-            ball_x = player_rect.right
-            # Calculate centers for angle
-            ball_center_y = ball_y + ball.get_height() / 2
-            paddle_center_y = player_y + player.get_height() / 2
+        if game_state == "MENU":
+            draw_text(screen, "BREAKOUT", 74, SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 4, GREEN)
+            draw_text(screen, "Press SPACE to start", 36, SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 2)
+            draw_text(screen, "Left/Right Arrows to move paddle", 24,
+                      SCREEN_WIDTH // 2, SCREEN_HEIGHT * 3 // 4)
+        elif game_state == "PLAYING":
+            all_sprites.draw(screen)
+            draw_text(screen, f"Score: {score}", 24, 70, 20)
+            draw_text(screen, f"Lives: {lives}", 24, SCREEN_WIDTH - 50, 20)
+        elif game_state == "PAUSED":
+            all_sprites.draw(screen)  # Draws the game state before pausing
+            draw_text(screen, "PAUSED", 74, SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 2, YELLOW)
+            draw_text(screen, "Press SPACE to continue", 36,
+                      SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50)
+        elif game_state == "GAME_OVER":
+            draw_text(screen, "GAME OVER", 74, SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 4, RED)
+            draw_text(screen, f"Your final score: {score}", 36,
+                      SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+            draw_text(screen, "Press 'R' to return to Menu", 24,
+                      SCREEN_WIDTH // 2, SCREEN_HEIGHT * 3 // 4)
 
-            relative_intersect = ball_center_y - paddle_center_y
-            normalized = relative_intersect / (player.get_height() / 2)
+        # Update the screen
+        pygame.display.flip()
 
-            # Clamp normalized value to [-1, 1]
-            normalized = max(-1, min(1, normalized))
+        # Control the frame rate (FPS)
+        clock.tick(FPS)
 
-            bounce_angle = normalized * MAX_BOUNCE_ANGLE
+    pygame.quit()
 
-            # Recalculate ball velocity components based
-            # on angle and current speed magnitude
-            current_speed = math.hypot(ball_dx, ball_dy)
-            ball_dx = current_speed * math.cos(bounce_angle)
-            ball_dy = current_speed * math.sin(bounce_angle)
 
-            # Ensure ball always goes to the right
-            # after hitting the left paddle
-            if ball_dx <= 0:
-                ball_dx = abs(ball_dx)
-
-            # Apply acceleration
-            ball_dx *= acceleration_factor
-            ball_dy *= acceleration_factor
-
-        # Ball movement
-        ball_x += ball_dx
-        ball_y += ball_dy
-
-        # Check for victory condition (e.g., score threshold)
-        if score >= SCORE_MAX:
-            game_state = GAME_STATE_VICTORY
-
-        # --- Drawing for PLAYING state ---
-        screen.blit(ball, (ball_x, ball_y))
-        screen.blit(player, (50, player_y))
-
-        # Update and draw score HUD
-        score
+if __name__ == "__main__":
+    main_game_loop()
