@@ -1,17 +1,15 @@
 import pygame
+import random
 
 # --- Game Constants ---
-# Screen dimensions
 SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
-# Colors (RGB)
+SCREEN_HEIGHT = 800
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
-# Other constants
 BALL_RADIUS = 10
 BALL_SPEED_X = 5
 BALL_SPEED_Y = 5
@@ -23,100 +21,164 @@ FPS = 60
 
 # --- Ball Class ---
 class Ball(pygame.sprite.Sprite):
-    """Represents the game's ball."""
+    """Representa a bola do jogo."""
     def __init__(self, x, y, radius, color, speed_x, speed_y):
         super().__init__()
+        self.radius = radius
         self.image = pygame.Surface([radius * 2, radius * 2], pygame.SRCALPHA)
         pygame.draw.circle(self.image, color, (radius, radius), radius)
         self.rect = self.image.get_rect(center=(x, y))
         self.speed_x = speed_x
         self.speed_y = speed_y
+        self.color = color
+        self.hit_cooldown = 0  # delay de colisão
 
     def update(self):
-        """Updates the ball's position and handles wall collisions."""
-        self.rect.x += self.speed_x
-        self.rect.y += self.speed_y
+        self.rect.x += int(self.speed_x)
+        self.rect.y += int(self.speed_y)
 
-        # Collision with side walls
-        if self.rect.left <= 0 or self.rect.right >= SCREEN_WIDTH:
+        if self.rect.left <= 0:
+            self.rect.left = 0
             self.speed_x *= -1
-
-        # Collision with top wall
+        if self.rect.right >= SCREEN_WIDTH:
+            self.rect.right = SCREEN_WIDTH
+            self.speed_x *= -1
         if self.rect.top <= 0:
+            self.rect.top = 0
             self.speed_y *= -1
 
-        # Collision with bottom wall (lost a life)
-        if self.rect.bottom >= SCREEN_HEIGHT:
-            return True  # Signals that the ball went off-screen
-        return False
+        # reduz cooldown a cada frame
+        if self.hit_cooldown > 0:
+            self.hit_cooldown -= 1
 
-    def reset_position(self, x, y):
-        """Resets the ball's position to the center of the screen."""
+    def reset_position(self, x, y, speed_x=BALL_SPEED_X, speed_y=BALL_SPEED_Y):
         self.rect.center = (x, y)
-        self.speed_x = BALL_SPEED_X
-        self.speed_y = BALL_SPEED_Y
+        self.speed_x = speed_x if random.choice([True, False]) else -speed_x
+        self.speed_y = -abs(speed_y)
+        self.hit_cooldown = 0
 
 
 # --- Paddle Class ---
 class Paddle(pygame.sprite.Sprite):
-    """Represents the player-controlled paddle."""
     def __init__(self, x, y, width, height, color):
         super().__init__()
         self.image = pygame.Surface([width, height])
         self.image.fill(color)
         self.rect = self.image.get_rect(center=(x, y))
+        self.width = width
 
     def update(self):
-        """Updates the paddle's position based on keyboard input."""
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] and self.rect.left > 0:
             self.rect.x -= PADDLE_SPEED
         if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:
             self.rect.x += PADDLE_SPEED
 
+        # garante que a raquete não saia da tela
+        if self.rect.left < 0:
+            self.rect.left = 0
+        if self.rect.right > SCREEN_WIDTH:
+            self.rect.right = SCREEN_WIDTH
+
+
+# --- Block Class ---
+class Block(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, height, color, row):
+        super().__init__()
+        self.image = pygame.Surface([width, height])
+        self.image.fill(color)
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.row = row  # guarda a linha
+
 
 # --- Game Functions ---
 def draw_text(surface, text, size, x, y, color=WHITE):
-    """Draws text on the screen."""
     font = pygame.font.Font(None, size)
     text_surface = font.render(text, True, color)
     text_rect = text_surface.get_rect(center=(x, y))
     surface.blit(text_surface, text_rect)
 
 
+def generate_blocks(
+    rows, cols, start_x, start_y,
+    block_width, block_height, padding, colors=None
+):
+    blocks = pygame.sprite.Group()
+    for row in range(rows):
+        for col in range(cols):
+            x = start_x + col * (block_width + padding)
+            y = start_y + row * (block_height + padding)
+            color = (colors[row % len(colors)]
+                     if colors
+                     else (random.randint(50, 255),
+                           random.randint(50, 255),
+                           random.randint(50, 255)))
+            block = Block(x, y, block_width, block_height, color, row)
+            blocks.add(block)
+    return blocks
+
+
+# --- Main Game Loop ---
 def main_game_loop():
-    """Main function containing the game loop."""
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Breakout Pygame")
+    pygame.display.set_caption("Breakout")
     clock = pygame.time.Clock()
 
-    # --- Game Variables ---
     score = 0
     lives = 3
-    game_state = "MENU"  # States: "MENU", "PLAYING", "PAUSED", "GAME_OVER"
+    level = 1
+    game_state = "MENU"
 
-    # Sprite groups
     all_sprites = pygame.sprite.Group()
     balls = pygame.sprite.Group()
     paddles = pygame.sprite.Group()
+    blocks = pygame.sprite.Group()
 
-    # Create the ball
-    ball = Ball(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2,
-                BALL_RADIUS, WHITE, BALL_SPEED_X, BALL_SPEED_Y)
+    ball = Ball(SCREEN_WIDTH // 2,
+                SCREEN_HEIGHT // 2,
+                BALL_RADIUS,
+                WHITE,
+                BALL_SPEED_X,
+                -BALL_SPEED_Y)
     all_sprites.add(ball)
     balls.add(ball)
 
-    # Create the paddle
-    paddle = Paddle(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30,
-                    PADDLE_WIDTH, PADDLE_HEIGHT, BLUE)
+    paddle = Paddle(SCREEN_WIDTH // 2,
+                    SCREEN_HEIGHT - 30,
+                    PADDLE_WIDTH,
+                    PADDLE_HEIGHT,
+                    WHITE)
     all_sprites.add(paddle)
     paddles.add(paddle)
 
-    # --- Main Game Loop ---
+    rows = 5
+    cols = 8
+    padding = 8
+    block_width = (SCREEN_WIDTH - (cols + 1) * padding) // cols
+    block_height = 30
+    start_x = padding
+    start_y = 60
+    colors = [
+        (200, 50, 50),
+        (200, 120, 50),
+        (200, 200, 50),
+        (50, 180, 50),
+        (50, 120, 200)
+    ]
+    blocks = generate_blocks(rows,
+                             cols,
+                             start_x,
+                             start_y,
+                             block_width,
+                             block_height,
+                             padding,
+                             colors)
+    for b in blocks:
+        all_sprites.add(b)
+
     running = True
     while running:
-        # Event handling
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -126,75 +188,143 @@ def main_game_loop():
                         game_state = "PLAYING"
                         score = 0
                         lives = 3
-                        ball.reset_position(
-                            SCREEN_WIDTH // 2,
-                            SCREEN_HEIGHT // 2
-                        )
+                        level = 1
+                        blocks.empty()
+                        blocks = generate_blocks(rows,
+                                                 cols,
+                                                 start_x,
+                                                 start_y,
+                                                 block_width,
+                                                 block_height,
+                                                 padding,
+                                                 colors)
+                        all_sprites.empty()
+                        all_sprites.add(ball, paddle)
+                        for b in blocks:
+                            all_sprites.add(b)
+                        ball.reset_position(SCREEN_WIDTH // 2,
+                                            SCREEN_HEIGHT // 2)
                     elif game_state == "PAUSED":
                         game_state = "PLAYING"
                     elif game_state == "PLAYING":
                         game_state = "PAUSED"
-                elif event.key == pygame.K_r and game_state == "GAME_OVER":
+                elif (event.key == pygame.K_r and
+                      (game_state == "GAME_OVER" or
+                       game_state == "WIN")):
                     game_state = "MENU"
 
-        # --- Game Logic (based on state) ---
         if game_state == "PLAYING":
-            # Update sprites
             all_sprites.update()
 
-            # Ball logic and collisions
-            ball_out = ball.update()
-            if ball_out:
+            if ball.rect.bottom >= SCREEN_HEIGHT:
                 lives -= 1
                 if lives <= 0:
                     game_state = "GAME_OVER"
                 else:
                     ball.reset_position(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
 
-            # Ball collision with paddle
             if pygame.sprite.spritecollide(paddle, balls, False):
-                ball.speed_y *= -1
-                # Small adjustment to prevent the ball from getting stuck
+                offset = ((ball.rect.centerx - paddle.rect.centerx) /
+                          (paddle.width / 2))
+                offset = max(-1, min(1, offset))
+                base_speed = max(abs(ball.speed_x), BALL_SPEED_X)
+                ball.speed_x = base_speed * offset
+                ball.speed_y = -abs(ball.speed_y)
                 ball.rect.bottom = paddle.rect.top - 1
 
-            # You will add block collision logic here later
-            # For now, just as an example for scoring:
-            # if block_hit:
-            #     score += 10
-            #     remove_block()
+            # Colisão bola-blocos
+            hits = pygame.sprite.spritecollide(ball, blocks, dokill=True)
+            if hits and ball.hit_cooldown == 0:
+                ball.speed_y *= -1
+                score += 10 * len(hits)
 
-        # --- Drawing to the Screen ---
-        screen.fill(BLACK)  # Fills the background with black
+                # multiplicadores mais suaves
+                for h in hits:
+                    multipliers = [1.15, 1.1, 1.05, 1.02, 1.0]
+                    row_index = min(h.row, len(multipliers)-1)
+                    m = multipliers[row_index]
+                    ball.speed_x *= m
+                    ball.speed_y *= m
 
+                ball.hit_cooldown = 10  # delay (~10 frames)
+
+            if len(blocks) == 0:
+                game_state = "WIN"
+
+        # --- Drawing ---
+        screen.fill(BLACK)
         if game_state == "MENU":
-            draw_text(screen, "BREAKOUT", 74, SCREEN_WIDTH // 2,
-                      SCREEN_HEIGHT // 4, GREEN)
-            draw_text(screen, "Press SPACE to start", 36, SCREEN_WIDTH // 2,
+            draw_text(screen,
+                      "BREAKOUT",
+                      74,
+                      SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 4,
+                      GREEN)
+            draw_text(screen,
+                      "Press SPACE to start",
+                      36,
+                      SCREEN_WIDTH // 2,
                       SCREEN_HEIGHT // 2)
-            draw_text(screen, "Left/Right Arrows to move paddle", 24,
-                      SCREEN_WIDTH // 2, SCREEN_HEIGHT * 3 // 4)
+            draw_text(screen,
+                      "Left/Right Arrows to move paddle",
+                      24,
+                      SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT * 3 // 4)
         elif game_state == "PLAYING":
             all_sprites.draw(screen)
             draw_text(screen, f"Score: {score}", 24, 70, 20)
-            draw_text(screen, f"Lives: {lives}", 24, SCREEN_WIDTH - 50, 20)
+            draw_text(screen, f"Lives: {lives}", 24, SCREEN_WIDTH - 70, 20)
+            draw_text(screen, f"Level: {level}", 18, SCREEN_WIDTH // 2, 20)
         elif game_state == "PAUSED":
-            all_sprites.draw(screen)  # Draws the game state before pausing
-            draw_text(screen, "PAUSED", 74, SCREEN_WIDTH // 2,
-                      SCREEN_HEIGHT // 2, YELLOW)
-            draw_text(screen, "Press SPACE to continue", 36,
-                      SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50)
+            all_sprites.draw(screen)
+            draw_text(screen,
+                      "PAUSED",
+                      74,
+                      SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 2,
+                      YELLOW)
+            draw_text(screen,
+                      "Press SPACE to continue",
+                      36,
+                      SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 2 + 50)
         elif game_state == "GAME_OVER":
-            draw_text(screen, "GAME OVER", 74, SCREEN_WIDTH // 2,
-                      SCREEN_HEIGHT // 4, RED)
-            draw_text(screen, f"Your final score: {score}", 36,
-                      SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
-            draw_text(screen, "Press 'R' to return to Menu", 24,
-                      SCREEN_WIDTH // 2, SCREEN_HEIGHT * 3 // 4)
+            draw_text(screen,
+                      "GAME OVER",
+                      74,
+                      SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 4,
+                      RED)
+            draw_text(screen,
+                      f"Your final score: {score}",
+                      36,
+                      SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 2)
+            draw_text(screen,
+                      "Press 'R' to return to Menu",
+                      24,
+                      SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT * 3 // 4)
+        elif game_state == "WIN":
+            all_sprites.draw(screen)
+            draw_text(screen,
+                      "YOU WIN!",
+                      74,
+                      SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 4,
+                      GREEN)
+            draw_text(screen,
+                      f"Final Score: {score}",
+                      36,
+                      SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT // 2)
+            draw_text(screen,
+                      "Press 'R' to return to Menu",
+                      24,
+                      SCREEN_WIDTH // 2,
+                      SCREEN_HEIGHT * 3 // 4)
 
-        # Update the screen
         pygame.display.flip()
-
-        # Control the frame rate (FPS)
         clock.tick(FPS)
 
     pygame.quit()
