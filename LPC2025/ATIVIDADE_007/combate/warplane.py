@@ -1,53 +1,96 @@
 import math
 import pygame
+import core
+from core import Bullet
 
-# Initialize pygame
+# Initialize Pygame
 pygame.init()
 
 # Screen setup
 WIDTH, HEIGHT = 800, 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Spaceship")
-clock = pygame.time.Clock()
+screen, clock = core.screen_setup(WIDTH, HEIGHT, "Warplane Combat")
+
+# Scoreboard setup
+pygame.font.init()
+score_font = pygame.font.Font("assets/PressStart2P.ttf", 44)
+score1_pos = (WIDTH // 4, 30)
+score2_pos = (3 * WIDTH // 4, 30)
 
 # upload images
-IMAGE_PATH_airplane1 = "assets/airplaneGreen.png"
-airplane1 = pygame.image.load(IMAGE_PATH_airplane1).convert_alpha()
-IMAGE_PATH_airplane2 = "assets/airplaneOrange.png"
-airplane2 = pygame.image.load(IMAGE_PATH_airplane2).convert_alpha()
+PATH_green = "assets/airplaneGreen.png"
+PATH_orange = "assets/airplaneOrange.png"
+PATH_bullet = "assets/bullet.png"
+img_G, img_OR, img_bul = core.load_image(PATH_green, PATH_orange, PATH_bullet)
+img_cloud = pygame.image.load("assets/nuvem.png").convert_alpha()
 
 # scale of images
 airplane_SIZE = 40  # pixels
-img_w, img_h = airplane1.get_size()
+img_w, img_h = img_G.get_size()
 scale = (airplane_SIZE * 2) / max(img_w, img_h)
 new_size = (max(1, int(img_w * scale)), max(1, int(img_h * scale)))
-airplane1_image = pygame.transform.smoothscale(airplane1, new_size)
-airplane2_image = pygame.transform.smoothscale(airplane2, new_size)
+airplane_green_image = pygame.transform.smoothscale(img_G, new_size)
+airplane_orange_image = pygame.transform.smoothscale(img_OR, new_size)
+
+# cloud setup
+cloud_rect = img_cloud.get_rect()
+# cloud 1
+pos_cloud_1_x = WIDTH // 4
+pos_cloud_1_y = HEIGHT // 2
+cloud_rect_1 = cloud_rect.copy()
+cloud_rect_1.center = (pos_cloud_1_x, pos_cloud_1_y)
+# cloud 2
+pos_cloud_2_x = WIDTH * 3 // 4
+pos_cloud_2_y = HEIGHT // 2
+cloud_rect_2 = cloud_rect.copy()
+cloud_rect_2.center = (pos_cloud_2_x, pos_cloud_2_y)
+
+# Scale bullet image
+bul_SIZE = 4  # pixels
+bul_img_w, bul_img_h = img_bul.get_size()
+bul_scale = (bul_SIZE * 2) / max(bul_img_w, bul_img_h)
+bul_new_w = max(1, int(bul_img_w * bul_scale))
+bul_new_h = max(1, int(bul_img_h * bul_scale))
+bul_new_size = (bul_new_w, bul_new_h)
+bul_image = pygame.transform.smoothscale(img_bul, bul_new_size)
 
 # state variables
-initial_angle = 0.0  # degrees, 0 points up
+initial_angle = 0.0
 speed = 180.0
 initial_rad = math.radians(initial_angle - 270)
 
-# airplane 1
-x1 = WIDTH / 2
-y1 = HEIGHT / 2
-vel_x1 = math.sin(initial_rad) * speed
-vel_y1 = -math.cos(initial_rad) * speed
-angle1 = 0.0
+# airplane green
+x_green_initial = WIDTH / 2
+y_green_initial = HEIGHT / 2
+x_green = x_green_initial
+y_green = y_green_initial
+vel_x_green = math.sin(initial_rad) * speed
+vel_y_green = -math.cos(initial_rad) * speed
+angle_Green = 0.0
+green_hit_timer = 0.0
+green_respawn_delay = 2.0
 
-# airplane 2
-x2 = WIDTH / 4
-y2 = HEIGHT / 4
-vel_x2 = math.sin(initial_rad) * speed
-vel_y2 = -math.cos(initial_rad) * speed
-angle2 = 0.0
+# airplane orange
+x_orange_initial = WIDTH / 4
+y_orange_initial = HEIGHT / 4
+x_orange = x_orange_initial
+y_orange = y_orange_initial
+vel_x_orange = math.sin(initial_rad) * speed
+vel_y_orange = -math.cos(initial_rad) * speed
+angle_orange = 0.0
+orange_hit_timer = 0.0
+orange_respawn_delay = 2.0
 
-# Movement parameters (kept slower from prior change)
+# Movement parameters
 ROT_SPEED = 225.0   # degrees per second
+BULLET_MAX_TRAVEL_DISTANCE = 800
 
-# Brake mode
-BRAKE = 0
+# Lists to hold active bullets
+bullets_green = []
+bullets_orange = []
+
+# Score
+score_green = 0
+score_orange = 0
 
 running = True
 while running:
@@ -56,78 +99,172 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        if event.type == pygame.KEYDOWN:
+            # Player Orange fires
+            if event.key == pygame.K_s and not bullets_orange:
+                # Offset bullet starting position slightly from airplane center
+                rad = math.radians(angle_orange - 270)
+                offset = airplane_SIZE / 2
+                bullet_start_x = x_orange + math.sin(rad) * offset
+                bullet_start_y = y_orange - math.cos(rad) * offset
+                bullets_orange.append(
+                    Bullet(
+                        bullet_start_x,
+                        bullet_start_y,
+                        angle_orange,
+                        bul_image,
+                        BULLET_MAX_TRAVEL_DISTANCE,
+                    )
+                )
+
+            # Player Green fires
+            if event.key == pygame.K_DOWN and not bullets_green:
+                # Offset bullet starting position slightly from airplane center
+                bullet_offset = airplane_SIZE / 2
+                rad = math.radians(angle_Green - 270)
+                bullet_start_x = x_green + math.sin(rad) * bullet_offset
+                bullet_start_y = y_green - math.cos(rad) * bullet_offset
+                bullets_green.append(
+                    Bullet(
+                        bullet_start_x,
+                        bullet_start_y,
+                        angle_Green,
+                        bul_image,
+                        BULLET_MAX_TRAVEL_DISTANCE,
+                    )
+                )
 
     keys = pygame.key.get_pressed()
 
-    # Corrected rotation: left decreases angle, right increases angle
-    # airplane 1 controls
-    if keys[pygame.K_LEFT]:
-        angle1 -= ROT_SPEED * dt
-    if keys[pygame.K_RIGHT]:
-        angle1 += ROT_SPEED * dt
+    # airplane green movement and respawn handling
+    if green_hit_timer <= 0:
+        if keys[pygame.K_LEFT]:
+            angle_Green -= ROT_SPEED * dt
+        if keys[pygame.K_RIGHT]:
+            angle_Green += ROT_SPEED * dt
+        angle_Green = angle_Green % 360
+        rad_green = math.radians(angle_Green - 270)
+        dir_x_green = math.sin(rad_green)
+        dir_y_green = -math.cos(rad_green)
+        vel_x_green = dir_x_green * speed
+        vel_y_green = dir_y_green * speed
+        x_green += vel_x_green * dt
+        y_green += vel_y_green * dt
 
-    # airplane 2 controls
-    if keys[pygame.K_a]:
-        angle2 -= ROT_SPEED * dt
-    if keys[pygame.K_d]:
-        angle2 += ROT_SPEED * dt
+        # Wrap around screen edges
+        if x_green < 0:
+            x_green += WIDTH
+        elif x_green > WIDTH:
+            x_green -= WIDTH
+        if y_green < 0:
+            y_green += HEIGHT
+        elif y_green > HEIGHT:
+            y_green -= HEIGHT
+    else:
+        green_hit_timer -= dt
+        angle_Green += ROT_SPEED * dt * 4
+        angle_Green = angle_Green % 360
+        if green_hit_timer <= 0:
+            x_green = x_green_initial
+            y_green = y_green_initial
+            angle_Green = 0.0
 
-    # Keep angle between 0–360
-    angle1 = angle1 % 360
-    angle2 = angle2 % 360
-    rad1 = math.radians(angle1 - 270)
-    rad2 = math.radians(angle2 - 270)
+    # airplane orange movement and respawn handling
+    if orange_hit_timer <= 0:
+        if keys[pygame.K_a]:
+            angle_orange -= ROT_SPEED * dt
+        if keys[pygame.K_d]:
+            angle_orange += ROT_SPEED * dt
+        angle_orange = angle_orange % 360
+        rad_orange = math.radians(angle_orange - 270)
+        dir_x_orange = math.sin(rad_orange)
+        dir_y_orange = -math.cos(rad_orange)
+        vel_x_orange = dir_x_orange * speed
+        vel_y_orange = dir_y_orange * speed
+        x_orange += vel_x_orange * dt
+        y_orange += vel_y_orange * dt
 
-    # Calculate direction vector (0 degrees points up)
-    dir_x1 = math.sin(rad1)
-    dir_y1 = -math.cos(rad1)
-    dir_x2 = math.sin(rad2)
-    dir_y2 = -math.cos(rad2)
+        # Wrap around screen edges
+        if x_orange < 0:
+            x_orange += WIDTH
+        elif x_orange > WIDTH:
+            x_orange -= WIDTH
+        if y_orange < 0:
+            y_orange += HEIGHT
+        elif y_orange > HEIGHT:
+            y_orange -= HEIGHT
+    else:
+        orange_hit_timer -= dt
+        angle_orange += ROT_SPEED * dt * 4
+        angle_orange = angle_orange % 360
+        if orange_hit_timer <= 0:
+            x_orange = x_orange_initial
+            y_orange = y_orange_initial
+            angle_orange = 0.0
 
-    # Movement
-    # airplane 1
-    vel_x1 = dir_x1 * speed
-    vel_y1 = dir_y1 * speed
-    # airplane 2
-    vel_x2 = dir_x2 * speed
-    vel_y2 = dir_y2 * speed
-    # Update position
-    x1 += vel_x1 * dt
-    y1 += vel_y1 * dt
-    x2 += vel_x2 * dt
-    y2 += vel_y2 * dt
+    # Update and draw bullets
+    for bullet in bullets_green[:]:
+        if not bullet.update(dt, WIDTH, HEIGHT):
+            bullets_green.remove(bullet)
 
-    # Wrap around screen edges
-    # airplane 1
-    if x1 < 0:
-        x1 += WIDTH
-    elif x1 > WIDTH:
-        x1 -= WIDTH
-    if y1 < 0:
-        y1 += HEIGHT
-    elif y1 > HEIGHT:
-        y1 -= HEIGHT
-    # airplane 2
-    if x2 < 0:
-        x2 += WIDTH
-    elif x2 > WIDTH:
-        x2 -= WIDTH
-    if y2 < 0:
-        y2 += HEIGHT
-    elif y2 > HEIGHT:
-        y2 -= HEIGHT
+    for bullet in bullets_orange[:]:
+        if not bullet.update(dt, WIDTH, HEIGHT):
+            bullets_orange.remove(bullet)
+
+    #  Collision Detection
+    green_plane_rect = airplane_green_image.get_rect(
+        center=(int(x_green), int(y_green))
+    )
+    orange_plane_rect = airplane_orange_image.get_rect(
+        center=(int(x_orange), int(y_orange))
+    )
+    #  Collision: Bullets from GREEN hit ORANGE
+    for bullet in bullets_green[:]:
+        if bullet.get_rect().colliderect(orange_plane_rect):
+            score_green += 1
+            orange_hit_timer = orange_respawn_delay
+            bullets_green.remove(bullet)
+            break
+    #  Collision: Bullets from ORANGE hit GREEN
+    for bullet in bullets_orange[:]:
+        if bullet.get_rect().colliderect(green_plane_rect):
+            score_orange += 1
+            green_hit_timer = green_respawn_delay
+            bullets_orange.remove(bullet)
+            break
 
     # Render (background and rotated ship)
-    screen.fill((10, 10, 30))
-    # Use -angle so the sprite visually matches the movement direction
-    rotated1 = pygame.transform.rotate(airplane1_image, -angle1)
-    rect1 = rotated1.get_rect(center=(x1, y1))
+    screen.fill((0, 0, 170))
+    # airplane green
+    rotated1 = pygame.transform.rotate(airplane_green_image, -angle_Green)
+    rect1 = rotated1.get_rect(center=(x_green, y_green))
     screen.blit(rotated1, rect1.topleft)
-    # airplane 2
-    rotated2 = pygame.transform.rotate(airplane2_image, -angle2)
-    rect2 = rotated2.get_rect(center=(x2, y2))
+    # airplane orange
+    rotated2 = pygame.transform.rotate(airplane_orange_image, -angle_orange)
+    rect2 = rotated2.get_rect(center=(x_orange, y_orange))
     screen.blit(rotated2, rect2.topleft)
 
+    # Draw bullets
+    for bullet in bullets_green:
+        bullet.draw(screen)
+    for bullet in bullets_orange:
+        bullet.draw(screen)
+
+    # Draw clouds
+    screen.blit(img_cloud, cloud_rect_1)
+    screen.blit(img_cloud, cloud_rect_2)
+
+    # Render scores
+    ORANGE_COLOR = (210, 105, 30)
+    GREEN_COLOR = (0, 170, 0)
+    score_text_orange = score_font.render(
+        str(score_orange), True, ORANGE_COLOR
+    )
+    score_text_green = score_font.render(
+        str(score_green), True, GREEN_COLOR
+    )
+    screen.blit(score_text_orange, score1_pos)
+    screen.blit(score_text_green, score2_pos)
     pygame.display.flip()
 
 pygame.quit()
