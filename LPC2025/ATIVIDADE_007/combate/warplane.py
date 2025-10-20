@@ -5,25 +5,21 @@ from core import Bullet
 
 # Initialize Pygame
 pygame.init()
+pygame.mixer.init()
 
 # Screen setup
-WIDTH, HEIGHT = 800, 600
-screen, clock = core.screen_setup(WIDTH, HEIGHT, "Warplane Combat")
+screen, clock, WIDTH, HEIGHT = core.screen_setup("Warplane Combat")
 
 # Scoreboard setup
-pygame.font.init()
-score_font = pygame.font.Font("assets/PressStart2P.ttf", 44)
-score1_pos = (WIDTH // 4, 30)
-score2_pos = (3 * WIDTH // 4, 30)
+score_font, score1_pos, score2_pos = core.scoreboard_setup(WIDTH)
 
 # upload images
 PATH_green = "assets/airplaneGreen.png"
 PATH_orange = "assets/airplaneOrange.png"
-PATH_bullet = "assets/bullet.png"
-img_G, img_OR, img_bul = core.load_image(PATH_green, PATH_orange, PATH_bullet)
+img_G, img_OR, img_bul, sound_bullet = core.load_image(PATH_green, PATH_orange)
 img_cloud = pygame.image.load("assets/nuvem.png").convert_alpha()
 
-# scale of images
+# scale of airplane
 airplane_SIZE = 40  # pixels
 img_w, img_h = img_G.get_size()
 scale = (airplane_SIZE * 2) / max(img_w, img_h)
@@ -45,13 +41,8 @@ cloud_rect_2 = cloud_rect.copy()
 cloud_rect_2.center = (pos_cloud_2_x, pos_cloud_2_y)
 
 # Scale bullet image
-bul_SIZE = 4  # pixels
-bul_img_w, bul_img_h = img_bul.get_size()
-bul_scale = (bul_SIZE * 2) / max(bul_img_w, bul_img_h)
-bul_new_w = max(1, int(bul_img_w * bul_scale))
-bul_new_h = max(1, int(bul_img_h * bul_scale))
-bul_new_size = (bul_new_w, bul_new_h)
-bul_image = pygame.transform.smoothscale(img_bul, bul_new_size)
+bul_image = core.scale_bullet_image(img_bul)
+
 
 # state variables
 initial_angle = 0.0
@@ -103,6 +94,7 @@ while running:
             # Player Orange fires
             if event.key == pygame.K_s and not bullets_orange:
                 # Offset bullet starting position slightly from airplane center
+                sound_bullet.play()
                 rad = math.radians(angle_orange - 270)
                 offset = airplane_SIZE / 2
                 bullet_start_x = x_orange + math.sin(rad) * offset
@@ -120,6 +112,7 @@ while running:
             # Player Green fires
             if event.key == pygame.K_DOWN and not bullets_green:
                 # Offset bullet starting position slightly from airplane center
+                sound_bullet.play()
                 bullet_offset = airplane_SIZE / 2
                 rad = math.radians(angle_Green - 270)
                 bullet_start_x = x_green + math.sin(rad) * bullet_offset

@@ -3,19 +3,44 @@ import math
 
 
 # Screen setup
-def screen_setup(width, height, title):
+def screen_setup(title):
+    width, height = 800, 600
     screen = pygame.display.set_mode((width, height))
     pygame.display.set_caption(title)
     clock = pygame.time.Clock()
-    return screen, clock
+    return screen, clock, width, height
 
 
-# upload images
-def load_image(IMAGE_PATH_1, IMAGE_PATH_2, bullet):
+# Scoreboard setup
+def scoreboard_setup(WIDTH):
+    pygame.font.init()
+    score_font = pygame.font.Font("assets/PressStart2P.ttf", 44)
+    score1_pos = (WIDTH // 4, 30)
+    score2_pos = (3 * WIDTH // 4, 30)
+    return score_font, score1_pos, score2_pos
+
+
+# upload images and sound
+def load_image(IMAGE_PATH_1, IMAGE_PATH_2):
+    bullet_sound = pygame.mixer.Sound("assets/bullet.wav")
+    bullet = "assets/bullet.png"
     image_1 = pygame.image.load(IMAGE_PATH_1).convert_alpha()
     image_2 = pygame.image.load(IMAGE_PATH_2).convert_alpha()
     bullet_image = pygame.image.load(bullet).convert_alpha()
-    return image_1, image_2, bullet_image
+    bullet_sound = pygame.mixer.Sound("assets/bullet.wav")
+    return image_1, image_2, bullet_image, bullet_sound
+
+
+# Scale bullet image
+def scale_bullet_image(img_bul):
+    bul_SIZE = 4  # pixels
+    bul_img_w, bul_img_h = img_bul.get_size()
+    bul_scale = (bul_SIZE * 2) / max(bul_img_w, bul_img_h)
+    bul_new_w = max(1, int(bul_img_w * bul_scale))
+    bul_new_h = max(1, int(bul_img_h * bul_scale))
+    bul_new_size = (bul_new_w, bul_new_h)
+    bul_image = pygame.transform.smoothscale(img_bul, bul_new_size)
+    return bul_image
 
 
 class Bullet:
