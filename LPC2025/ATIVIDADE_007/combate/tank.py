@@ -1,13 +1,13 @@
 import math
-import os
 import pygame
 from dataclasses import dataclass
+import core
 
 SCREEN_WIDTH = 900
 SCREEN_HEIGHT = 600
 FPS = 60
-
 WIN_SCORE = 5
+
 TANK_SIZE = 48
 TANK_SPEED = 160
 TANK_ROT_SPEED = 180
@@ -20,47 +20,45 @@ BULLET_COOLDOWN = 0.35
 SPIN_SPEED = 800
 SPIN_DURATION = 1.0
 
-OBSTACLES = [
-    pygame.Rect(300, 150, 60, 200),
-    pygame.Rect(540, 150, 60, 200),
-    pygame.Rect(160, 420, 120, 30),
-    pygame.Rect(620, 420, 120, 30),
-]
-
 # Colors
 BG_COLOR = (24, 24, 36)
 WHITE = (255, 255, 255)
 P1_COLOR = (80, 200, 120)
 P2_COLOR = (250, 0, 0)
 OBST_COLOR = (100, 100, 120)
-TEXT_COLOR = (220, 220, 220)
 FLASH_COLOR = (255, 200, 50)
 
 # Initialization
 pygame.init()
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Combat - Atari style (fan remake)")
-clock = pygame.time.Clock()
-font = pygame.font.Font(None, 32)
-big_font = pygame.font.Font(None, 64)
+pygame.mixer.init()
+screen, clock, WIDTH, HEIGHT = core.screen_setup("Combat")
 
-# Load images safely
-base_path = os.path.dirname(__file__)
-tank_p1_path = os.path.join(base_path, "assets", "tank_p1.png")
-tank_p2_path = os.path.join(base_path, "assets", "tank_p2.png")
+# Load tank and bullet images + sound
+img_t1, img_t2, img_bullet, bullet_sound = core.load_image(
+    "assets/tank_p1.png", "assets/tank_p2.png"
+)
+bullet_image = core.scale_bullet_image(img_bullet)
 
-tank_img_p1 = pygame.image.load(tank_p1_path).convert_alpha()
-tank_img_p2 = pygame.image.load(tank_p2_path).convert_alpha()
-tank_img_p1 = pygame.transform.smoothscale(
-    tank_img_p1, (TANK_SIZE, TANK_SIZE)
-)
-tank_img_p2 = pygame.transform.smoothscale(
-    tank_img_p2, (TANK_SIZE, TANK_SIZE)
-)
+tank_img_p1 = pygame.transform.smoothscale(img_t1, (TANK_SIZE, TANK_SIZE))
+tank_img_p2 = pygame.transform.smoothscale(img_t2, (TANK_SIZE, TANK_SIZE))
+
+# Scoreboard setup (same style as warplane)
+score_font, score1_pos, score2_pos = core.scoreboard_setup(WIDTH)
+COLOR_P1 = (0, 200, 100)
+COLOR_P2 = (220, 60, 60)
+
+# Obstacles
+OBSTACLES = [
+    pygame.Rect(WIDTH // 2 - 150, HEIGHT // 2 - 100, 60, 200),
+    pygame.Rect(WIDTH // 2 + 90, HEIGHT // 2 - 100, 60, 200),
+    pygame.Rect(WIDTH // 2 - 260, HEIGHT // 2 + 160, 120, 30),
+    pygame.Rect(WIDTH // 2 + 140, HEIGHT // 2 + 160, 120, 30),
+]
 
 
 @dataclass
 class Bullet:
+    # Represents a tank bullet.
     x: float
     y: float
     vx: float
@@ -70,14 +68,23 @@ class Bullet:
 
     def rect(self) -> pygame.Rect:
         return pygame.Rect(
-            int(self.x - BULLET_RADIUS),
-            int(self.y - BULLET_RADIUS),
-            BULLET_RADIUS * 2,
-            BULLET_RADIUS * 2,
+            int(self.x - bullet_image.get_width() / 2),
+            int(self.y - bullet_image.get_height() / 2),
+            bullet_image.get_width(),
+            bullet_image.get_height(),
+        )
+
+    def draw(self, surface):
+        surface.blit(
+            bullet_image,
+            (self.x - bullet_image.get_width() / 2,
+             self.y - bullet_image.get_height() / 2),
         )
 
 
 class Tank:
+    # Tank object with rotation, shooting, and collision.
+
     def __init__(self, x, y, angle_deg, color, controls, name="Tank"):
         self.x = float(x)
         self.y = float(y)
@@ -93,8 +100,8 @@ class Tank:
         self.spin_timer = 0.0
 
     def update(self, dt, keys):
-        self.prev_x = self.x
-        self.prev_y = self.y
+        # Update position, rotation, and cooldown.
+        self.prev_x, self.prev_y = self.x, self.y
 
         if self.spinning:
             self.angle += SPIN_SPEED * dt
@@ -109,23 +116,20 @@ class Tank:
             self.angle += TANK_ROT_SPEED * dt
         self.angle %= 360
 
-        brake = 0
+        move_dir = 0
         if keys[self.controls["forward"]]:
-            brake += 1
+            move_dir += 1
         if keys[self.controls["back"]]:
-            brake -= 1
+            move_dir -= 1
 
-        rad = math.radians(self.angle)
-        dir_x = math.sin(rad)
-        dir_y = -math.cos(rad)
+        if move_dir != 0:
+            self.x, self.y = core.move_in_direction(
+                self.x, self.y, self.angle, TANK_SPEED * move_dir, dt
+            )
 
-        self.x += dir_x * TANK_SPEED * brake * dt
-        self.y += dir_y * TANK_SPEED * brake * dt
-
-        self.x = max(TANK_SIZE // 2,
-                     min(SCREEN_WIDTH - TANK_SIZE // 2, self.x))
-        self.y = max(TANK_SIZE // 2,
-                     min(SCREEN_HEIGHT - TANK_SIZE // 2, self.y))
+        # Keep tank inside screen
+        self.x = max(TANK_SIZE // 2, min(WIDTH - TANK_SIZE // 2, self.x))
+        self.y = max(TANK_SIZE // 2, min(HEIGHT - TANK_SIZE // 2, self.y))
 
         if self.cooldown > 0:
             self.cooldown -= dt
@@ -139,13 +143,13 @@ class Tank:
         )
 
     def shoot(self):
+        # Fire a bullet if possible.
         if self.spinning or self.cooldown > 0:
             return None
 
         rad = math.radians(self.angle)
         dir_x = math.sin(rad)
         dir_y = -math.cos(rad)
-
         bx = self.x + dir_x * (TANK_SIZE / 2 + BULLET_RADIUS + 2)
         by = self.y + dir_y * (TANK_SIZE / 2 + BULLET_RADIUS + 2)
         vx = dir_x * BULLET_SPEED
@@ -153,26 +157,30 @@ class Tank:
 
         self.cooldown = BULLET_COOLDOWN
         owner_id = 1 if self.color == P1_COLOR else 2
+        bullet_sound.play()  # Fire sound
         return Bullet(bx, by, vx, vy, owner_id, BULLET_LIFETIME)
 
     def hit(self):
+        """Trigger spin animation when hit."""
         self.spinning = True
         self.spin_timer = SPIN_DURATION
 
 
+# Helper functions
 def draw_tank(surface, tank: Tank):
+    # Draw tank rotated according to its angle.
     image = tank_img_p1 if tank.color == P1_COLOR else tank_img_p2
-    rotated = pygame.transform.rotate(image, -tank.angle)
-    rect = rotated.get_rect(center=(tank.x, tank.y))
-    surface.blit(rotated, rect.topleft)
+    core.draw_rotated_image(surface, image, tank.angle, tank.x, tank.y)
 
 
 def bullet_hits_obstacle(bullet: Bullet) -> bool:
+    # Check if a bullet hits any obstacle.
     rect = bullet.rect()
     return any(rect.colliderect(ob) for ob in OBSTACLES)
 
 
 def resolve_collisions(t1: Tank, t2: Tank):
+    # Prevent tanks from overlapping obstacles or each other.
     for tank in [t1, t2]:
         rect = tank.get_rect()
         for ob in OBSTACLES:
@@ -196,21 +204,15 @@ def resolve_collisions(t1: Tank, t2: Tank):
                     else:
                         tank.y += dy_bottom
 
-                rect = tank.get_rect()
-
-        tank.x = max(TANK_SIZE / 2,
-                     min(SCREEN_WIDTH - TANK_SIZE / 2, tank.x))
-        tank.y = max(TANK_SIZE / 2,
-                     min(SCREEN_HEIGHT - TANK_SIZE / 2, tank.y))
+        tank.x = max(TANK_SIZE / 2, min(WIDTH - TANK_SIZE / 2, tank.x))
+        tank.y = max(TANK_SIZE / 2, min(HEIGHT - TANK_SIZE / 2, tank.y))
 
     if t1.get_rect().colliderect(t2.get_rect()):
-        t1.x = t1.prev_x
-        t1.y = t1.prev_y
-        t2.x = t2.prev_x
-        t2.y = t2.prev_y
+        t1.x, t1.y = t1.prev_x, t1.prev_y
+        t2.x, t2.y = t2.prev_x, t2.prev_y
 
 
-# Controls
+# Game Setup
 controls_p1 = {
     "left": pygame.K_a,
     "right": pygame.K_d,
@@ -227,17 +229,16 @@ controls_p2 = {
     "shoot": pygame.K_RCTRL,
 }
 
-# Objects
-p1 = Tank(120, SCREEN_HEIGHT // 2, 0, P1_COLOR, controls_p1, "Player 1")
-p2 = Tank(SCREEN_WIDTH - 120, SCREEN_HEIGHT // 2, 180,
-          P2_COLOR, controls_p2, "Player 2")
+p1 = Tank(120, HEIGHT // 2, 0, P1_COLOR, controls_p1, "Player 1")
+p2 = Tank(WIDTH - 120, HEIGHT // 2, 180, P2_COLOR, controls_p2, "Player 2")
 
 bullets = []
 flash_time = 0.0
 winner = None
 game_state = "PLAYING"
 
-# Main loop
+
+# Main Game Loop
 running = True
 while running:
     dt = clock.tick(FPS) / 1000.0
@@ -252,7 +253,6 @@ while running:
                 bullet = p1.shoot()
                 if bullet:
                     bullets.append(bullet)
-
             if event.key == p2.controls["shoot"]:
                 bullet = p2.shoot()
                 if bullet:
@@ -275,9 +275,9 @@ while running:
 
             if (
                 bullet.x < -10
-                or bullet.x > SCREEN_WIDTH + 10
+                or bullet.x > WIDTH + 10
                 or bullet.y < -10
-                or bullet.y > SCREEN_HEIGHT + 10
+                or bullet.y > HEIGHT + 10
                 or bullet.life <= 0
             ):
                 bullets.remove(bullet)
@@ -303,30 +303,31 @@ while running:
             winner = "Player 1" if p1.score >= WIN_SCORE else "Player 2"
             game_state = "MATCH_OVER"
 
+    # Drawing
     screen.fill(BG_COLOR)
 
     for ob in OBSTACLES:
         pygame.draw.rect(screen, OBST_COLOR, ob)
 
     for bullet in bullets:
-        pygame.draw.circle(screen, WHITE,
-                           (int(bullet.x), int(bullet.y)), BULLET_RADIUS)
+        bullet.draw(screen)
 
     draw_tank(screen, p1)
     draw_tank(screen, p2)
 
-    score_text = font.render(
-        f"P1: {p1.score}     P2: {p2.score}", True, TEXT_COLOR
+    # Score display
+    core.render_score(
+        screen, score_font, score1_pos, score2_pos,
+        p1.score, p2.score, COLOR_P1, COLOR_P2
     )
-    screen.blit(score_text, (SCREEN_WIDTH // 2 - 80, 8))
 
     if game_state == "MATCH_OVER":
-        over = big_font.render(f"{winner} wins!", True, FLASH_COLOR)
-        screen.blit(over, (SCREEN_WIDTH // 2 - over.get_width() // 2, 260))
-
-        info = font.render("Press R to restart", True, TEXT_COLOR)
-        screen.blit(info, (SCREEN_WIDTH // 2 - info.get_width() // 2, 320))
-
+        over = score_font.render(f"{winner} WINS!", True, FLASH_COLOR)
+        screen.blit(over,
+                    (WIDTH // 2 - over.get_width() // 2, HEIGHT // 2 - 40))
+        info = score_font.render("PRESS R TO RESTART", True, WHITE)
+        screen.blit(info,
+                    (WIDTH // 2 - info.get_width() // 2, HEIGHT // 2 + 20))
         keys = pygame.key.get_pressed()
         if keys[pygame.K_r]:
             p1.score = 0
@@ -334,7 +335,7 @@ while running:
             game_state = "PLAYING"
 
     elif flash_time > 0:
-        flash = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         alpha = int(140 * (flash_time / 0.18))
         flash.fill((255, 255, 255, alpha))
         screen.blit(flash, (0, 0))
