@@ -10,10 +10,9 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Spaceship")
 clock = pygame.time.Clock()
 
-# PLACE YOUR IMAGE HERE (change the path if needed)
+# PLACE YOUR IMAGE HERE
 IMAGE_PATH = "assets/nave.png"  # your image here
 
-# Load player image (no os/sys usage)
 try:
     img = pygame.image.load(IMAGE_PATH).convert_alpha()
 except Exception as e:
@@ -22,7 +21,7 @@ except Exception as e:
     raise SystemExit
 
 # Optional scaling. Remove this part if you want the original size.
-SHIP_SIZE = 40  # reference size (pixels)
+SHIP_SIZE = 40
 img_w, img_h = img.get_size()
 scale = (SHIP_SIZE * 2) / max(img_w, img_h)
 new_size = (max(1, int(img_w * scale)), max(1, int(img_h * scale)))
@@ -31,27 +30,26 @@ ship_image = pygame.transform.smoothscale(img, new_size)
 # Ship state variables
 x = WIDTH / 2
 y = HEIGHT / 2
-angle = 0.0  # degrees, 0 points up
+angle = 0.0
 vel_x = 0.0
 vel_y = 0.0
 
-# Movement parameters (kept slower from prior change)
-ROT_SPEED = 90.0   # degrees per second
-THRUST = 120.0     # units per second
+ROT_SPEED = 90.0
+THRUST = 120.0
 
 # Brake mode: 0 = continuous thrust, 1 = thrust only when pressed
 BRAKE = 0
 
 running = True
 while running:
-    dt = clock.tick(60) / 1000.0  # delta time in seconds
+    dt = clock.tick(60) / 1000.0
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_b:
-                BRAKE = 1 - BRAKE  # toggle brake mode
+                BRAKE = 1 - BRAKE
 
     keys = pygame.key.get_pressed()
 
@@ -65,7 +63,7 @@ while running:
     angle = angle % 360
     rad = math.radians(angle)
 
-    # Calculate direction vector (0 degrees points up)
+    # Calculate direction
     dir_x = math.sin(rad)
     dir_y = -math.cos(rad)
 
@@ -76,12 +74,8 @@ while running:
         if up_pressed:
             vel_x += dir_x * THRUST * dt
             vel_y += dir_y * THRUST * dt
-        # optional gentle drag to slow over time (uncomment to enable)
-        # vel_x *= 0.995
-        # vel_y *= 0.995
     else:
         if up_pressed:
-            # set a constant velocity in the facing direction (units/sec)
             vel_x = dir_x * THRUST
             vel_y = dir_y * THRUST
         else:
@@ -102,9 +96,7 @@ while running:
     elif y > HEIGHT:
         y -= HEIGHT
 
-    # Render (background and rotated ship)
     screen.fill((10, 10, 30))
-    # Use -angle so the sprite visually matches the movement direction
     rotated = pygame.transform.rotate(ship_image, -angle)
     rect = rotated.get_rect(center=(x, y))
     screen.blit(rotated, rect.topleft)
